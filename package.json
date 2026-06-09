@@ -1,0 +1,48 @@
+{
+  "name": "fabric-military-simulation",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "template": {
+    "name": "fabric-military-simulation",
+    "displayName": "Fabric Military Simulation (Northgate Digital Twin)",
+    "description": "Real-time 3D digital twin of a military training range built on Microsoft Fabric via Rayfin (BaaS) — sectors, vehicles, soldiers, drones, radar tracks and weather streamed live into a Three.js battlefield."
+  },
+  "scripts": {
+    "predev": "rayfin env --framework vite",
+    "prebuild": "rayfin env --framework vite",
+    "dev": "rayfin up --exclude-services staticHosting && vite",
+    "dev:mock": "cross-env VITE_RAYFIN_MOCK=1 vite",
+    "build": "tsc -b && vite build",
+    "build:fabric": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "rayfin:up": "rayfin up",
+    "simulate": "tsx simulator/simulator.ts",
+    "simulate:seed": "tsx simulator/seed.ts"
+  },
+  "dependencies": {
+    "@microsoft/rayfin-auth-provider-fabric": "1.33.0",
+    "@microsoft/rayfin-client": "1.33.0",
+    "@microsoft/rayfin-core": "1.33.0",
+    "@microsoft/rayfin-data": "1.33.0",
+    "@react-three/drei": "^9.114.0",
+    "@react-three/fiber": "^8.17.10",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "simplex-noise": "^4.0.3",
+    "three": "^0.169.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@microsoft/rayfin-cli": "1.33.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.169.0",
+    "@vitejs/plugin-react-swc": "^4.2.2",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3",
+    "vite": "^7.3.2"
+  }
+}
