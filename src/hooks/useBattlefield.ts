@@ -11,7 +11,7 @@ const POLL_MS = 1000;
  *  - In MOCK mode: subscribes to the in-browser simulator (250 ms ticks).
  *  - In Rayfin mode: polls all entities once per second and assembles them.
  */
-export function useBattlefield(): BattlefieldSnapshot {
+export function useBattlefield(enabled = true): BattlefieldSnapshot {
   const [snap, setSnap] = useState<BattlefieldSnapshot>(() =>
     isMockMode() ? mock.getSnapshot() : emptySnapshot()
   );
@@ -20,6 +20,7 @@ export function useBattlefield(): BattlefieldSnapshot {
     if (isMockMode()) {
       return mock.subscribe(setSnap);
     }
+    if (!enabled) return;
     let cancelled = false;
     let missionStart = Date.now();
 
@@ -83,7 +84,7 @@ export function useBattlefield(): BattlefieldSnapshot {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [enabled]);
 
   return snap;
 }

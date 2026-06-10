@@ -1,9 +1,10 @@
 import { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { Drone } from '@/types';
+import type { Drone, Selection } from '@/types';
 import { geoToWorld } from '@/utils/geo';
 import { terrainHeight } from '@/utils/terrain';
+import { HighlightRing } from './HighlightRing';
 
 const DRONE_SCALE = 60;
 
@@ -164,7 +165,15 @@ function WarmateModel({ d: _d }: { d: Drone }) {
   );
 }
 
-function DroneModel({ d }: { d: Drone }) {
+function DroneModel({
+  d,
+  selected,
+  onSelect,
+}: {
+  d: Drone;
+  selected: boolean;
+  onSelect: (sel: Selection) => void;
+}) {
   const ref = useRef<THREE.Group>(null!);
   const bankRef = useRef<THREE.Group>(null!);
   const ringRef = useRef<THREE.Mesh>(null!);
@@ -236,7 +245,22 @@ function DroneModel({ d }: { d: Drone }) {
   const isWarmate = d.droneType === 'Warmate';
 
   return (
-    <group ref={ref} scale={DRONE_SCALE}>
+    <group
+      ref={ref}
+      scale={DRONE_SCALE}
+      onClick={(e: ThreeEvent<MouseEvent>) => {
+        e.stopPropagation();
+        onSelect({ kind: 'drone', id: d.id });
+      }}
+      onPointerOver={(e: ThreeEvent<PointerEvent>) => {
+        e.stopPropagation();
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'auto';
+      }}
+    >
+      {selected && <HighlightRing radius={1.5} y={0} />}
       <group ref={bankRef}>
         {isWarmate ? <WarmateModel d={d} /> : <FlyEyeModel d={d} />}
       </group>
@@ -264,11 +288,24 @@ function DroneModel({ d }: { d: Drone }) {
   );
 }
 
-export function Drones({ drones }: { drones: Drone[] }) {
+export function Drones({
+  drones,
+  selection,
+  onSelect,
+}: {
+  drones: Drone[];
+  selection: Selection | null;
+  onSelect: (sel: Selection) => void;
+}) {
   return (
     <group>
       {drones.map((d) => (
-        <DroneModel key={d.id} d={d} />
+        <DroneModel
+          key={d.id}
+          d={d}
+          selected={selection?.kind === 'drone' && selection.id === d.id}
+          onSelect={onSelect}
+        />
       ))}
     </group>
   );

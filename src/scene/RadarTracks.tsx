@@ -1,9 +1,10 @@
 import { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { RadarTrack } from '@/types';
+import type { RadarTrack, Selection } from '@/types';
 import { geoToWorld } from '@/utils/geo';
 import { terrainHeight } from '@/utils/terrain';
+import { HighlightRing } from './HighlightRing';
 
 const COLOR: Record<RadarTrack['classification'], string> = {
   friendly: '#22d3ee',
@@ -11,7 +12,15 @@ const COLOR: Record<RadarTrack['classification'], string> = {
   unknown: '#facc15',
 };
 
-function TrackMarker({ tr }: { tr: RadarTrack }) {
+function TrackMarker({
+  tr,
+  selected,
+  onSelect,
+}: {
+  tr: RadarTrack;
+  selected: boolean;
+  onSelect: (sel: Selection) => void;
+}) {
   const ringRef = useRef<THREE.Mesh>(null!);
   const beamRef = useRef<THREE.Mesh>(null!);
 
@@ -34,7 +43,21 @@ function TrackMarker({ tr }: { tr: RadarTrack }) {
   const color = COLOR[tr.classification];
 
   return (
-    <group position={[x, y, z]}>
+    <group
+      position={[x, y, z]}
+      onClick={(e: ThreeEvent<MouseEvent>) => {
+        e.stopPropagation();
+        onSelect({ kind: 'radar', id: tr.id });
+      }}
+      onPointerOver={(e: ThreeEvent<PointerEvent>) => {
+        e.stopPropagation();
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'auto';
+      }}
+    >
+      {selected && <HighlightRing radius={85} y={2} />}
       {/* ground ring ping */}
       <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.5, 0]}>
         <ringGeometry args={[40, 60, 64]} />
@@ -49,11 +72,24 @@ function TrackMarker({ tr }: { tr: RadarTrack }) {
   );
 }
 
-export function RadarTracks({ tracks }: { tracks: RadarTrack[] }) {
+export function RadarTracks({
+  tracks,
+  selection,
+  onSelect,
+}: {
+  tracks: RadarTrack[];
+  selection: Selection | null;
+  onSelect: (sel: Selection) => void;
+}) {
   return (
     <group>
       {tracks.map((t) => (
-        <TrackMarker key={t.id} tr={t} />
+        <TrackMarker
+          key={t.id}
+          tr={t}
+          selected={selection?.kind === 'radar' && selection.id === t.id}
+          onSelect={onSelect}
+        />
       ))}
     </group>
   );
