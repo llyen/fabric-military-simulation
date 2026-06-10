@@ -186,6 +186,13 @@ npm run simulate &                   # pętla 1 Hz pisząca do Rayfin
 npm run dev                          # frontend + auto env z `rayfin env`
 ```
 
+> ℹ️ **Seed na hostingu Fabric** — backend hostowany w Fabric pozwala wyłącznie
+> na Fabric SSO (brokered, przeglądarkowy), więc encje z `@role('authenticated')`
+> nie da się zapisać headless przez email+hasło (`simulate:seed`). Użyj wtedy
+> `npm run simulate:seed:sql` — pisze dane **wprost do bazy SQL Fabric** tokenem
+> Entra (`az login --tenant <fabricTenantId>` najpierw), omijając Data API.
+> `simulate:seed` (password auth) działa w lokalnym `rayfin up` dev.
+
 Front automatycznie poll'uje Rayfin co 1 s (`useBattlefield.ts`); sceny
 i HUD aktualizują się w żywo. Brak zmiennych `VITE_RAYFIN_*` → graceful
 fallback do mocka (z ostrzeżeniem w konsoli).
