@@ -59,7 +59,10 @@ export function useBattlefield(enabled = true): BattlefieldSnapshot {
             c.data.SimEvent.select([
               'id', 'kind', 'severity', 'sector', 'title', 'message', 'createdAt',
             ]).orderBy({ createdAt: 'desc' }).execute(),
-            c.data.SimState.select(['missionClockSec', 'updatedAt']).execute(),
+            // Isolated: a failure here (e.g. backend still registering the new
+            // entity) must never reject the batch and freeze unit movement.
+            c.data.SimState.select(['missionClockSec', 'updatedAt']).execute()
+              .catch(() => [] as never),
           ]);
         if (cancelled) return;
         const [
