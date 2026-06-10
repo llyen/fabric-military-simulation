@@ -49,11 +49,17 @@ const FABRIC_SCOPE = 'https://api.fabric.microsoft.com/.default';
 // (path ends with /aiassistant/openai). These match what the Fabric
 // `FabricOpenAI` SDK client sends under the hood.
 const API_VERSION = '2024-05-01-preview';
-const RUN_POLL_MS = 1500;
+const RUN_POLL_MS = 800;
 const RUN_TIMEOUT_MS = 40000;
 
-/** Acquire an app-only access token for the Fabric service. */
+// Per-instance caches so warm invocations skip avoidable round-trips. They live
+// only in process memory and rebuild themselves automatically after a restart.
+let cachedToken = null; // { value, exp }  exp = epoch ms
+let cachedAssistantId = null;
+
+/** Acquire (and cache) an app-only access token for the Fabric service. */
 async function getToken() {
+  if (cachedToken && Date.now() < cachedToken.exp) return cachedToken.value;
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
@@ -66,7 +72,9 @@ async function getToken() {
   );
   if (!res.ok) throw new Error(`token request failed: ${res.status} ${await res.text()}`);
   const json = await res.json();
-  return json.access_token;
+  // Refresh 60s before real expiry to avoid using a token mid-flight.
+  cachedToken = { value: json.access_token, exp: Date.now() + (json.expires_in - 60) * 1000 };
+  return cachedToken.value;
 }
 
 /**
@@ -104,10 +112,13 @@ async function callDataAgent(token, question) {
     return res.json();
   };
 
-  const assistant = await fapi('/assistants', 'POST', { model: 'gpt-4o' });
+  // Reuse one assistant per warm instance — it is stateless across threads.
+  if (!cachedAssistantId) {
+    cachedAssistantId = (await fapi('/assistants', 'POST', { model: 'gpt-4o' })).id;
+  }
   const thread = await fapi('/threads', 'POST', {});
   await fapi(`/threads/${thread.id}/messages`, 'POST', { role: 'user', content: question });
-  let run = await fapi(`/threads/${thread.id}/runs`, 'POST', { assistant_id: assistant.id });
+  let run = await fapi(`/threads/${thread.id}/runs`, 'POST', { assistant_id: cachedAssistantId });
 
   const deadline = Date.now() + RUN_TIMEOUT_MS;
   while (run.status === 'queued' || run.status === 'in_progress' || run.status === 'cancelling') {
