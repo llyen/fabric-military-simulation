@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { Drone, Selection } from '@/types';
 import { geoToWorld } from '@/utils/geo';
 import { terrainHeight } from '@/utils/terrain';
+import { useTrackInterpolation } from '@/utils/useTrackInterpolation';
 import { HighlightRing } from './HighlightRing';
 
 const DRONE_SCALE = 60;
@@ -178,38 +179,20 @@ function DroneModel({
   const bankRef = useRef<THREE.Group>(null!);
   const ringRef = useRef<THREE.Mesh>(null!);
   const beamRef = useRef<THREE.Group>(null!);
-  const aux = useRef({
-    target: new THREE.Vector3(),
-    last: new THREE.Vector3(),
-    yaw: 0,
-    init: false,
-  });
+  const interp = useTrackInterpolation();
 
   useFrame((state, delta) => {
     if (!ref.current) return;
-    const [x, , z] = geoToWorld(d.latitude, d.longitude);
-    const ground = terrainHeight(x, z);
-    const y = ground + d.altitudeM;
-    aux.current.target.set(x, y, z);
-    if (!aux.current.init) {
-      ref.current.position.copy(aux.current.target);
-      aux.current.last.copy(aux.current.target);
-      aux.current.init = true;
-    }
-    const k = 1 - Math.exp(-delta * 4);
-    ref.current.position.lerp(aux.current.target, k);
+    const [gx, , gz] = geoToWorld(d.latitude, d.longitude);
+    const s = interp(gx, gz, performance.now());
+    const y = terrainHeight(s.x, s.z) + d.altitudeM;
+    ref.current.position.set(s.x, y, s.z);
 
-    // Yaw from horizontal motion direction.
-    const dx = aux.current.target.x - aux.current.last.x;
-    const dz = aux.current.target.z - aux.current.last.z;
-    const motion = Math.hypot(dx, dz);
-    if (motion > 0.5) aux.current.yaw = Math.atan2(dx, dz);
-    aux.current.last.copy(aux.current.target);
-
-    let dy = aux.current.yaw - ref.current.rotation.y;
+    // Yaw from interpolated motion direction.
+    let dy = s.yaw - ref.current.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
-    ref.current.rotation.y += dy * (1 - Math.exp(-delta * 2.5));
+    if (s.moving) ref.current.rotation.y += dy * (1 - Math.exp(-delta * 2.5));
 
     // Fixed-wing FlyEye banks into turns; Warmate pitches gently
     if (bankRef.current) {
