@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   askDataAgent,
   isDataAgentEnabled,
@@ -16,8 +16,21 @@ export function AskAI() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<DataAgentAnswer | null>(null);
   const [showSql, setShowSql] = useState(false);
+
+  // Tick an elapsed-seconds counter while a question is in flight so the
+  // operator can see the agent is working (runs typically take ~10–20 s).
+  useEffect(() => {
+    if (!loading) return;
+    setElapsed(0);
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [loading]);
 
   const ask = async (q: string) => {
     const text = q.trim();
@@ -78,6 +91,16 @@ export function AskAI() {
               {loading ? '…' : 'Zapytaj'}
             </button>
           </form>
+
+          {loading && (
+            <div className="ask-ai-thinking">
+              <span className="ask-ai-spinner" />
+              <span>
+                Agent analizuje dane… {elapsed}s
+                {elapsed >= 8 && ' (zapytania zwykle trwają 10–20 s)'}
+              </span>
+            </div>
+          )}
 
           {result && (
             <div className="ask-ai-result">
