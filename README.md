@@ -186,12 +186,24 @@ npm run simulate &                   # pętla 1 Hz pisząca do Rayfin
 npm run dev                          # frontend + auto env z `rayfin env`
 ```
 
-> ℹ️ **Seed na hostingu Fabric** — backend hostowany w Fabric pozwala wyłącznie
-> na Fabric SSO (brokered, przeglądarkowy), więc encje z `@role('authenticated')`
-> nie da się zapisać headless przez email+hasło (`simulate:seed`). Użyj wtedy
-> `npm run simulate:seed:sql` — pisze dane **wprost do bazy SQL Fabric** tokenem
-> Entra (`az login --tenant <fabricTenantId>` najpierw), omijając Data API.
-> `simulate:seed` (password auth) działa w lokalnym `rayfin up` dev.
+> ℹ️ **Seed i symulacja na hostingu Fabric** — backend hostowany w Fabric pozwala
+> wyłącznie na Fabric SSO (brokered, przeglądarkowy), więc encji z
+> `@role('authenticated')` nie da się zapisać headless przez Data API
+> (`simulate:seed` / `simulate` używają email+hasło lub session JWT). Zamiast tego:
+>
+> - `npm run simulate:seed:sql` — **statyczny** seed (Sectors + WeatherCells z
+>   definicji świata oraz Vehicles/Soldiers/Drones z `../fabric-military-demo/datasets`)
+>   pisany **wprost do bazy SQL Fabric** tokenem Entra, z pominięciem Data API.
+> - `npm run simulate:sql` — **żywa** symulacja: seeduje proceduralny świat
+>   (sektory, pojazdy, żołnierze, drony, pogoda), a następnie co tick przesuwa
+>   obiekty i dopisuje tory radarowe wprost do SQL. To jest sposób na „działającą”
+>   symulację (ruch obiektów) na hostingu Fabric — `npm run simulate` (Data API)
+>   jest tam blokowany przez Fabric SSO. Zostaw proces uruchomiony, a aplikacja
+>   (poll co 1 s) pokaże ruch na żywo.
+>
+> Wymagane raz: `az login --tenant <fabricTenantId>` oraz wcześniejszy `rayfin up`
+> (tworzy `rayfin/.deployments.json`). `simulate:seed` / `simulate` (password auth)
+> działają w lokalnym `rayfin up` dev.
 
 Front automatycznie poll'uje Rayfin co 1 s (`useBattlefield.ts`); sceny
 i HUD aktualizują się w żywo. Brak zmiennych `VITE_RAYFIN_*` → graceful
