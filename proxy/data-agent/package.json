@@ -4,9 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Read-only proxy between the IRONSHIELD app and a Fabric Data Agent.",
-  "main": "index.mjs",
+  "main": "src/functions/*.mjs",
   "scripts": {
-    "start": "node index.mjs"
+    "start": "func start",
+    "start:standalone": "node index.mjs"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
   },
   "engines": {
     "node": ">=18"
