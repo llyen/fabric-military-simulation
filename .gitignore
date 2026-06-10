@@ -13,3 +13,6 @@ dist-rayfin
 # Rayfin deploy artifacts (per-environment, not source)
 rayfin/.temp
 rayfin/.deployments.json
+
+# TypeScript incremental build info
+*.tsbuildinfo
