@@ -159,8 +159,8 @@ export function advance(w: BattlefieldSnapshot) {
     const dz = (d.latitude - sc.lat) * KM_PER_DEG_LAT;
     const r = Math.hypot(dx, dz) || 0.01;
     const tan = { x: -dz / r, z: dx / r };
-    d.longitude += kmToLon(tan.x * 0.012);
-    d.latitude += kmToLat(tan.z * 0.012);
+    d.longitude += kmToLon(tan.x * 0.03);
+    d.latitude += kmToLat(tan.z * 0.03);
     d.updatedAt = new Date();
   }
   if (phaseDetect && w.radarTracks.length < 12 && rand() < 0.5) {

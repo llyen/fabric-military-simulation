@@ -50,7 +50,8 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInitialWorld>) {
   await pool.request().batch(
     'DELETE FROM dbo.Sectors; DELETE FROM dbo.Vehicles; DELETE FROM dbo.Soldiers; ' +
-      'DELETE FROM dbo.Drones; DELETE FROM dbo.WeatherCells; DELETE FROM dbo.RadarTracks;'
+      'DELETE FROM dbo.Drones; DELETE FROM dbo.WeatherCells; DELETE FROM dbo.RadarTracks; ' +
+      'DELETE FROM dbo.SimEvents;'
   );
 
   for (const sec of world.sectors) {
@@ -236,6 +237,7 @@ async function insertNewTracks(
   world: ReturnType<typeof buildInitialWorld>,
   inserted: Set<string>
 ) {
+  const fresh: typeof world.radarTracks = [];
   for (const t of world.radarTracks) {
     if (inserted.has(t.id)) continue;
     await pool.request()
@@ -257,7 +259,117 @@ async function insertNewTracks(
         (id, trackId, classification, objectType, sector, latitude, longitude, speedKmh, headingDeg, distanceToBlueKm, confidence, radarId, detectedAt, updatedAt)
         VALUES (@id, @trackId, @classification, @objectType, @sector, @latitude, @longitude, @speedKmh, @headingDeg, @distanceToBlueKm, @confidence, @radarId, @detectedAt, @updatedAt)`);
     inserted.add(t.id);
+    fresh.push(t);
   }
+  return fresh;
+}
+
+interface SimEventRow {
+  kind: 'threat' | 'medevac' | 'logistics' | 'ew' | 'info';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  sector: string;
+  title: string;
+  message: string;
+}
+
+interface EventState {
+  firedDetect: boolean;
+  firedEngage: boolean;
+  lastMedevacT: number;
+  lastLogiT: number;
+}
+
+/** Derive HUD ticker events from the current world + freshly detected tracks. */
+function buildEvents(
+  world: ReturnType<typeof buildInitialWorld>,
+  freshTracks: ReturnType<typeof buildInitialWorld>['radarTracks'],
+  st: EventState
+): SimEventRow[] {
+  const t = world.missionClockSec;
+  const out: SimEventRow[] = [];
+
+  if (!st.firedDetect && t > 60) {
+    st.firedDetect = true;
+    out.push({
+      kind: 'ew', severity: 'medium', sector: 'Bravo',
+      title: 'Rozpoznanie radarowe aktywne',
+      message: 'Stacje radarowe rozpoczęły dozorowanie sektora kontaktu.',
+    });
+  }
+  if (!st.firedEngage && t > 180) {
+    st.firedEngage = true;
+    out.push({
+      kind: 'threat', severity: 'high', sector: 'Bravo',
+      title: 'Faza zaangażowania',
+      message: 'Pododdziały nawiązały kontakt ogniowy z przeciwnikiem.',
+    });
+  }
+
+  for (const trk of freshTracks) {
+    const hostile = trk.classification === 'hostile';
+    out.push({
+      kind: 'threat',
+      severity: hostile ? 'high' : 'medium',
+      sector: trk.sector,
+      title: `Kontakt radarowy ${trk.trackId}`,
+      message: `${hostile ? 'Wrogi' : 'Niezidentyfikowany'} ${trk.objectType} — ${trk.distanceToBlueKm.toFixed(1)} km od linii własnej.`,
+    });
+  }
+
+  // MEDEVAC when a soldier hits critical stress, throttled to one per 25 s.
+  if (t - st.lastMedevacT > 25) {
+    const hurt = world.soldiers.find((s) => s.stressLevel === 'critical');
+    if (hurt) {
+      st.lastMedevacT = t;
+      out.push({
+        kind: 'medevac', severity: 'critical', sector: hurt.sector,
+        title: `MEDEVAC ${hurt.soldierId}`,
+        message: `Żołnierz w stanie krytycznym (HR ${Math.round(hurt.heartRate)}). Wezwano ewakuację medyczną.`,
+      });
+    }
+  }
+
+  // Periodic logistics/info heartbeat every ~30 s so the feed keeps ticking.
+  if (t - st.lastLogiT > 30) {
+    st.lastLogiT = t;
+    const lowFuel = world.vehicles.filter((v) => v.fuelPercent < 40).length;
+    if (lowFuel > 0) {
+      out.push({
+        kind: 'logistics', severity: 'low', sector: 'Alpha',
+        title: 'Status zaopatrzenia',
+        message: `${lowFuel} pojazd(ów) z poziomem paliwa poniżej 40% — planowane tankowanie.`,
+      });
+    } else {
+      out.push({
+        kind: 'info', severity: 'low', sector: 'Alpha',
+        title: 'Meldunek sytuacyjny',
+        message: `Siły własne utrzymują rubież. Aktywnych kontaktów: ${world.radarTracks.length}.`,
+      });
+    }
+  }
+
+  return out;
+}
+
+async function insertEvents(pool: sql.ConnectionPool, events: SimEventRow[]) {
+  if (events.length === 0) return;
+  const now = new Date();
+  const json = JSON.stringify(
+    events.map((e) => ({ id: randomUUID(), ...e, createdAt: now.toISOString() }))
+  );
+  await pool.request()
+    .input('data', sql.NVarChar(sql.MAX), json)
+    .query(`INSERT INTO dbo.SimEvents (id, kind, severity, sector, title, message, createdAt)
+      SELECT id, kind, severity, sector, title, message, createdAt
+      FROM OPENJSON(@data) WITH (
+        id uniqueidentifier '$.id',
+        kind nvarchar(16) '$.kind',
+        severity nvarchar(16) '$.severity',
+        sector nvarchar(16) '$.sector',
+        title nvarchar(256) '$.title',
+        message nvarchar(1024) '$.message',
+        createdAt datetime2 '$.createdAt'
+      )`);
 }
 
 async function main() {
@@ -272,6 +384,12 @@ async function main() {
   console.log('[simulate:sql] seeded. Streaming movement — press Ctrl+C to stop.');
 
   const insertedTracks = new Set<string>();
+  const evState: EventState = {
+    firedDetect: false,
+    firedEngage: false,
+    lastMedevacT: -999,
+    lastLogiT: -999,
+  };
   let busy = false;
 
   async function reconnect() {
@@ -291,7 +409,8 @@ async function main() {
       // Hard timeout so a half-open socket can never wedge the loop forever.
       const writeP = (async () => {
         await pushMovement(pool, world);
-        await insertNewTracks(pool, world, insertedTracks);
+        const fresh = await insertNewTracks(pool, world, insertedTracks);
+        await insertEvents(pool, buildEvents(world, fresh, evState));
       })();
       writeP.catch(() => {}); // swallow late rejection after a timeout
       await withTimeout(writeP, WRITE_TIMEOUT_MS);
