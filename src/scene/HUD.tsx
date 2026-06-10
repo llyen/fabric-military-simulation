@@ -1,6 +1,7 @@
 import type { BattlefieldSnapshot, SimEvent } from '@/types';
 import { isMockMode } from '@/services/rayfinClient';
 import { SpeedControl } from './SpeedControl';
+import { AskAI } from './AskAI';
 
 const KIND_COLOR: Record<SimEvent['kind'], string> = {
   threat: '#ef4444',
@@ -118,6 +119,9 @@ export function HUD({ snapshot }: { snapshot: BattlefieldSnapshot }) {
 
       {/* Speed slider */}
       <SpeedControl />
+
+      {/* Ask AI (Fabric Data Agent) */}
+      <AskAI />
     </>
   );
 }

@@ -1,0 +1,14 @@
+{
+  "name": "SENTINEL-data-agent-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only proxy between the SENTINEL app and a Fabric Data Agent.",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
