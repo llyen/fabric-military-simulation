@@ -6,6 +6,7 @@ import { RadarTrack } from './RadarTrack.js';
 import { WeatherCell } from './WeatherCell.js';
 import { SimEvent } from './SimEvent.js';
 import { SimControl } from './SimControl.js';
+import { SimState } from './SimState.js';
 
 export type SENTINELSchema = {
   Sector: Sector;
@@ -16,6 +17,7 @@ export type SENTINELSchema = {
   WeatherCell: WeatherCell;
   SimEvent: SimEvent;
   SimControl: SimControl;
+  SimState: SimState;
 };
 
 export const schema = [
@@ -27,4 +29,5 @@ export const schema = [
   WeatherCell,
   SimEvent,
   SimControl,
+  SimState,
 ];
