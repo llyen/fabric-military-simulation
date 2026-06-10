@@ -90,21 +90,28 @@ export function buildInitialWorld(): BattlefieldSnapshot {
       });
     }
   }
-  const drones: Drone[] = SECTORS.map((sc, i) => ({
-    id: `dr-${i}`,
-    droneId: i % 2 === 0 ? `FE-0${i + 1}` : `WM-0${i + 1}`,
-    droneType: i % 2 === 0 ? 'FlyEye' : 'Warmate',
-    sector: sc.name,
-    latitude: sc.lat,
-    longitude: sc.lon,
-    altitudeM: 280,
-    batteryPercent: irand(70, 100),
-    observationType: 'patrol_scan',
-    targetClassification: 'none',
-    targetCount: 0,
-    confidence: 0,
-    updatedAt: now,
-  }));
+  const drones: Drone[] = SECTORS.map((sc, i) => {
+    // Start each drone offset from its sector centre so the tangential orbit in
+    // advance() has a non-zero radius (at r≈0 the tangent is zero and the drone
+    // would never move).
+    const ang = (i / SECTORS.length) * Math.PI * 2;
+    const orbitKm = sc.radiusKm * 0.5;
+    return {
+      id: `dr-${i}`,
+      droneId: i % 2 === 0 ? `FE-0${i + 1}` : `WM-0${i + 1}`,
+      droneType: i % 2 === 0 ? 'FlyEye' : 'Warmate',
+      sector: sc.name,
+      latitude: sc.lat + kmToLat(orbitKm * Math.sin(ang)),
+      longitude: sc.lon + kmToLon(orbitKm * Math.cos(ang)),
+      altitudeM: 280,
+      batteryPercent: irand(70, 100),
+      observationType: 'patrol_scan',
+      targetClassification: 'none',
+      targetCount: 0,
+      confidence: 0,
+      updatedAt: now,
+    };
+  });
   const weather: WeatherCell[] = SECTORS.map((sc) => ({
     id: `wx-${sc.name}`,
     sector: sc.name,
@@ -152,8 +159,8 @@ export function advance(w: BattlefieldSnapshot) {
     const dz = (d.latitude - sc.lat) * KM_PER_DEG_LAT;
     const r = Math.hypot(dx, dz) || 0.01;
     const tan = { x: -dz / r, z: dx / r };
-    d.longitude += kmToLon(tan.x * 0.04);
-    d.latitude += kmToLat(tan.z * 0.04);
+    d.longitude += kmToLon(tan.x * 0.012);
+    d.latitude += kmToLat(tan.z * 0.012);
     d.updatedAt = new Date();
   }
   if (phaseDetect && w.radarTracks.length < 12 && rand() < 0.5) {
