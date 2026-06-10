@@ -27,7 +27,7 @@ export function useBattlefield(enabled = true): BattlefieldSnapshot {
     async function poll() {
       try {
         const c = getRayfinClient();
-        const [sectors, vehicles, soldiers, drones, radarTracks, weather, events] =
+        const results =
           await Promise.all([
             c.data.Sector.select(['id', 'name', 'centerLat', 'centerLon', 'radiusKm', 'role']).execute(),
             c.data.Vehicle.select([
@@ -59,9 +59,18 @@ export function useBattlefield(enabled = true): BattlefieldSnapshot {
             c.data.SimEvent.select([
               'id', 'kind', 'severity', 'sector', 'title', 'message', 'createdAt',
             ]).orderBy({ createdAt: 'desc' }).execute(),
+            c.data.SimState.select(['missionClockSec', 'updatedAt']).execute(),
           ]);
         if (cancelled) return;
-        const missionClockSec = Math.floor((Date.now() - missionStart) / 1000);
+        const [
+          sectors, vehicles, soldiers, drones, radarTracks, weather, events, simState,
+        ] = results;
+        // Prefer the simulator's clock (advances with tempo, freezes on pause);
+        // fall back to wall-clock if the SimState row isn't available yet.
+        const serverClock = (simState as never as { missionClockSec: number }[])[0]?.missionClockSec;
+        const missionClockSec = typeof serverClock === 'number'
+          ? serverClock
+          : Math.floor((Date.now() - missionStart) / 1000);
         setSnap({
           sectors: sectors as never,
           vehicles: vehicles as never,

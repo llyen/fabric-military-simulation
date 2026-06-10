@@ -40,6 +40,8 @@ const BASE_STEPS = Math.max(1, Number(process.env.SIM_STEPS ?? 4));
 // connection as dead, abort, and reconnect. Prevents a half-open socket (Fabric
 // SQL silently dropping idle connections) from wedging the stream forever.
 const WRITE_TIMEOUT_MS = Number(process.env.SIM_WRITE_TIMEOUT_MS ?? 8000);
+// Fixed id of the single SimStates row the app reads for the mission clock.
+const SIM_STATE_ID = '11111111-1111-1111-1111-111111111111';
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -56,6 +58,17 @@ async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInit
       'DELETE FROM dbo.Drones; DELETE FROM dbo.WeatherCells; DELETE FROM dbo.RadarTracks; ' +
       'DELETE FROM dbo.SimEvents;'
   );
+
+  // Single mission-clock mirror row the app reads (upserted each tick below).
+  await pool.request()
+    .input('id', sql.UniqueIdentifier, SIM_STATE_ID)
+    .input('clock', sql.Int, world.missionClockSec)
+    .input('now', sql.DateTime2, new Date())
+    .query(`MERGE dbo.SimStates AS tgt
+      USING (SELECT @id AS id) AS src ON tgt.id = src.id
+      WHEN MATCHED THEN UPDATE SET missionClockSec = @clock, updatedAt = @now
+      WHEN NOT MATCHED THEN INSERT (id, missionClockSec, updatedAt)
+        VALUES (@id, @clock, @now);`);
 
   for (const sec of world.sectors) {
     await pool.request()
@@ -383,6 +396,17 @@ async function readDesiredSpeed(pool: sql.ConnectionPool, fallback: number): Pro
   return r.recordset.length ? Number(r.recordset[0].speed) : fallback;
 }
 
+/** Mirror the simulated mission clock so the app's HUD clock tracks sim tempo. */
+async function writeSimState(pool: sql.ConnectionPool, clockSec: number) {
+  await pool.request()
+    .input('id', sql.UniqueIdentifier, SIM_STATE_ID)
+    .input('clock', sql.Int, clockSec)
+    .input('now', sql.DateTime2, new Date())
+    .query(
+      'UPDATE dbo.SimStates SET missionClockSec = @clock, updatedAt = @now WHERE id = @id'
+    );
+}
+
 async function main() {
   const world = buildInitialWorld();
   let pool = await connect();
@@ -426,6 +450,7 @@ async function main() {
         await pushMovement(pool, world);
         const fresh = await insertNewTracks(pool, world, insertedTracks);
         await insertEvents(pool, buildEvents(world, fresh, evState));
+        await writeSimState(pool, world.missionClockSec);
       })();
       writeP.catch(() => {}); // swallow late rejection after a timeout
       await withTimeout(writeP, WRITE_TIMEOUT_MS);
