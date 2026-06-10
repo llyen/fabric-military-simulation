@@ -1,9 +1,10 @@
 import { useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { Vehicle } from '@/types';
+import type { Selection, Vehicle } from '@/types';
 import { geoToWorld, headingToYaw } from '@/utils/geo';
 import { terrainHeight } from '@/utils/terrain';
+import { HighlightRing } from './HighlightRing';
 
 const VEHICLE_SCALE = 50;
 
@@ -306,7 +307,15 @@ function Turret({ v }: { v: Vehicle }) {
   );
 }
 
-function VehicleModel({ v }: { v: Vehicle }) {
+function VehicleModel({
+  v,
+  selected,
+  onSelect,
+}: {
+  v: Vehicle;
+  selected: boolean;
+  onSelect: (sel: Selection) => void;
+}) {
   const ref = useRef<THREE.Group>(null!);
   const target = useRef(new THREE.Vector3());
   const lastPos = useRef(new THREE.Vector3());
@@ -342,7 +351,22 @@ function VehicleModel({ v }: { v: Vehicle }) {
   const damaged = !v.combatReady || v.engineStatus === 'damaged';
 
   return (
-    <group ref={ref} scale={VEHICLE_SCALE}>
+    <group
+      ref={ref}
+      scale={VEHICLE_SCALE}
+      onClick={(e: ThreeEvent<MouseEvent>) => {
+        e.stopPropagation();
+        onSelect({ kind: 'vehicle', id: v.id });
+      }}
+      onPointerOver={(e: ThreeEvent<PointerEvent>) => {
+        e.stopPropagation();
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'auto';
+      }}
+    >
+      {selected && <HighlightRing radius={2.6} />}
       {v.vehicleType === 'Rosomak' && <RosomakModel v={v} trackTex={trackTex} />}
       {v.vehicleType === 'Krab' && <KrabModel v={v} trackTex={trackTex} />}
       {v.vehicleType !== 'Rosomak' && v.vehicleType !== 'Krab' && (
@@ -369,11 +393,24 @@ function VehicleModel({ v }: { v: Vehicle }) {
   );
 }
 
-export function Vehicles({ vehicles }: { vehicles: Vehicle[] }) {
+export function Vehicles({
+  vehicles,
+  selection,
+  onSelect,
+}: {
+  vehicles: Vehicle[];
+  selection: Selection | null;
+  onSelect: (sel: Selection) => void;
+}) {
   return (
     <group>
       {vehicles.map((v) => (
-        <VehicleModel key={v.id} v={v} />
+        <VehicleModel
+          key={v.id}
+          v={v}
+          selected={selection?.kind === 'vehicle' && selection.id === v.id}
+          onSelect={onSelect}
+        />
       ))}
     </group>
   );

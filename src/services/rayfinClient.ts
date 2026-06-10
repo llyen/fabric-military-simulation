@@ -38,3 +38,8 @@ export function getRayfinClient(): RayfinClient<SENTINELSchema> {
   if (!client) throw new Error('Rayfin client not initialized.');
   return client;
 }
+
+/** Returns the Auth instance of the browser client, or null in mock/uninitialized mode. */
+export function getRayfinAuth() {
+  return client?.auth ?? null;
+}

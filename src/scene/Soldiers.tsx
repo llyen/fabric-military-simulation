@@ -1,9 +1,10 @@
 import { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { Soldier } from '@/types';
+import type { Selection, Soldier } from '@/types';
 import { geoToWorld } from '@/utils/geo';
 import { terrainHeight } from '@/utils/terrain';
+import { HighlightRing } from './HighlightRing';
 
 const STRESS_UNIFORM: Record<Soldier['stressLevel'], string> = {
   normal: '#3a5a32',
@@ -13,7 +14,15 @@ const STRESS_UNIFORM: Record<Soldier['stressLevel'], string> = {
 
 const FIGURE_SCALE = 35;
 
-function SoldierFigure({ s }: { s: Soldier }) {
+function SoldierFigure({
+  s,
+  selected,
+  onSelect,
+}: {
+  s: Soldier;
+  selected: boolean;
+  onSelect: (sel: Selection) => void;
+}) {
   const groupRef = useRef<THREE.Group>(null!);
   const tiltRef = useRef<THREE.Group>(null!);
   const aux = useRef({
@@ -83,7 +92,22 @@ function SoldierFigure({ s }: { s: Soldier }) {
       : '#86efac';
 
   return (
-    <group ref={groupRef} scale={FIGURE_SCALE}>
+    <group
+      ref={groupRef}
+      scale={FIGURE_SCALE}
+      onClick={(e: ThreeEvent<MouseEvent>) => {
+        e.stopPropagation();
+        onSelect({ kind: 'soldier', id: s.id });
+      }}
+      onPointerOver={(e: ThreeEvent<PointerEvent>) => {
+        e.stopPropagation();
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'auto';
+      }}
+    >
+      {selected && <HighlightRing radius={1.1} />}
       {/* tilt pivot — feet at y=0 of this inner group */}
       <group ref={tiltRef}>
         {/* helmet */}
@@ -139,11 +163,24 @@ function SoldierFigure({ s }: { s: Soldier }) {
   );
 }
 
-export function Soldiers({ soldiers }: { soldiers: Soldier[] }) {
+export function Soldiers({
+  soldiers,
+  selection,
+  onSelect,
+}: {
+  soldiers: Soldier[];
+  selection: Selection | null;
+  onSelect: (sel: Selection) => void;
+}) {
   return (
     <group>
       {soldiers.map((s) => (
-        <SoldierFigure key={s.id} s={s} />
+        <SoldierFigure
+          key={s.id}
+          s={s}
+          selected={selection?.kind === 'soldier' && selection.id === s.id}
+          onSelect={onSelect}
+        />
       ))}
     </group>
   );

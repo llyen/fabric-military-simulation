@@ -102,6 +102,13 @@ export interface SimEvent {
   createdAt: Date;
 }
 
+export type SelectionKind = 'vehicle' | 'soldier' | 'drone' | 'radar';
+
+export interface Selection {
+  kind: SelectionKind;
+  id: string;
+}
+
 export interface BattlefieldSnapshot {
   sectors: Sector[];
   vehicles: Vehicle[];
