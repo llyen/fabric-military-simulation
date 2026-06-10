@@ -324,21 +324,31 @@ function Craters() {
   const positions = useMemo(() => {
     const rng = mulberry32(99);
     const out: [number, number, number][] = [];
-    // Cluster craters around Bravo (contested sector)
+    const placed: [number, number][] = [];
+    const tryPush = (x: number, z: number, minDist: number) => {
+      for (const [px, pz] of placed) {
+        if (Math.hypot(x - px, z - pz) < minDist) return false;
+      }
+      placed.push([x, z]);
+      out.push([x, terrainHeight(x, z) + 0.2, z]);
+      return true;
+    };
+    // Cluster craters around Bravo (contested sector), spread evenly over the
+    // area (sqrt radius, not linear — linear piles them up in the centre) and
+    // reject any that land too close to an existing one so they never merge.
     const sec = SECTORS[1];
     const [bx, , bz] = geoToWorld(sec.lat, sec.lon);
-    for (let i = 0; i < 28; i++) {
+    const clusterR = sec.radiusKm * 1000 * 0.95;
+    for (let placedCount = 0, attempts = 0; placedCount < 22 && attempts < 800; attempts++) {
       const a = rng() * Math.PI * 2;
-      const r = rng() * sec.radiusKm * 1000 * 0.9;
-      const x = bx + Math.cos(a) * r;
-      const z = bz + Math.sin(a) * r;
-      out.push([x, terrainHeight(x, z) + 0.2, z]);
+      const r = Math.sqrt(rng()) * clusterR;
+      if (tryPush(bx + Math.cos(a) * r, bz + Math.sin(a) * r, 360)) placedCount++;
     }
-    // A handful elsewhere on contested edges
-    for (let i = 0; i < 12; i++) {
+    // A handful scattered across the wider range, well separated.
+    for (let scatter = 0, attempts = 0; scatter < 10 && attempts < 500; attempts++) {
       const x = (rng() * 2 - 1) * 5000;
       const z = (rng() * 2 - 1) * 5000;
-      out.push([x, terrainHeight(x, z) + 0.2, z]);
+      if (tryPush(x, z, 600)) scatter++;
     }
     return out;
   }, []);
@@ -348,7 +358,7 @@ function Craters() {
         <group key={i} position={[x, y, z]} scale={PROPS_SCALE * 0.6}>
           {/* dark scorch ring */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-            <ringGeometry args={[2, 8 + (i % 4) * 2, 24]} />
+            <ringGeometry args={[1.5, 5 + (i % 4) * 1.5, 24]} />
             <meshBasicMaterial
               color="#1a1308" transparent opacity={0.85} side={THREE.DoubleSide}
               polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2}
