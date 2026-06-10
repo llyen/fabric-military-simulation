@@ -264,6 +264,33 @@ warstwę **prezentacji** dla tej samej fikcyjnej operacji.
 
 ---
 
+## 🤖 Ask AI — Fabric Data Agent
+
+Panel **ASK AI** w HUD pozwala zadawać pytania w języku naturalnym o dane bitwy
+(„Ile pojazdów ma paliwo poniżej 40%?", „Pokaż żołnierzy w stanie krytycznym").
+Odpowiada **Fabric Data Agent** podpięty do tej samej bazy SQL co symulator —
+w trybie **tylko do odczytu** (nie zmienia tempa ani stanu symulacji).
+
+Przepływ (sekrety zostają po stronie serwera):
+
+```
+przeglądarka ─POST {question}─► proxy (service principal) ─Bearer─► Data Agent
+```
+
+Konfiguracja:
+
+1. Opublikuj **Data Agent** w workspace nad bazą Rayfin (`dbo.Vehicles`,
+   `dbo.Soldiers`, `dbo.Drones`, `dbo.RadarTracks`, `dbo.SimEvents`, …); dodaj
+   AI-instructions + przykładowe pary pytanie→SQL.
+2. Wdróż proxy z [`proxy/data-agent/`](proxy/data-agent/README.md) (Azure
+   Functions / Container Apps).
+3. Ustaw `VITE_DATA_AGENT_URL` w `.env` (root) na URL proxy i `npm run rayfin:up`.
+
+Dopóki `VITE_DATA_AGENT_URL` jest puste, panel pozostaje nieaktywny z podpowiedzią
+— reszta aplikacji działa bez zmian. Zmienne opisane w [`.env.example`](.env.example).
+
+---
+
 ## 📜 Licencja
 
 [MIT](../fabric-military-demo/LICENSE) — taka sama jak `fabric-military-demo`.
