@@ -409,6 +409,24 @@ canvas { display: block; }
 }
 .ask-ai-send:hover:not(:disabled) { background: rgba(34, 211, 238, 0.3); }
 .ask-ai-send:disabled { opacity: 0.5; cursor: not-allowed; }
+.ask-ai-thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.ask-ai-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(34, 211, 238, 0.25);
+  border-top-color: #22d3ee;
+  border-radius: 50%;
+  animation: ask-ai-spin 0.7s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes ask-ai-spin { to { transform: rotate(360deg); } }
 .ask-ai-result { margin-top: 10px; font-size: 12px; line-height: 1.5; }
 .ask-ai-answer { color: #e2e8f0; white-space: pre-wrap; }
 .ask-ai-error {
