@@ -19,6 +19,7 @@
     "lint": "eslint .",
     "rayfin:up": "rayfin up",
     "simulate": "tsx simulator/simulator.ts",
+    "simulate:sql": "tsx simulator/simulate-sql.ts",
     "simulate:seed": "tsx simulator/seed.ts",
     "simulate:seed:sql": "tsx simulator/seed-sql.ts"
   },
