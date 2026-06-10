@@ -18,12 +18,40 @@ if (!apiUrl || !key) {
   console.error('[seed] RAYFIN_API_URL / RAYFIN_PUBLISHABLE_KEY missing.');
   process.exit(1);
 }
+const accessToken =
+  process.env.RAYFIN_ACCESS_TOKEN ?? process.env.VITE_RAYFIN_ACCESS_TOKEN;
+
 const client = new RayfinClient<SENTINELSchema>({
   baseUrl: apiUrl.endsWith('/') ? apiUrl : `${apiUrl}/`,
   publishableKey: key,
+  ...(accessToken ? { accessToken } : {}),
   useProxy: false,
   authStorage: false,
 });
+
+// Entities are guarded by @role('authenticated', ...), so headless writes need a
+// Rayfin session. Two supported modes:
+//   • Fabric hosting — only Fabric brokered (SSO) auth is available, which is
+//     browser-only. Supply a Rayfin session JWT via RAYFIN_ACCESS_TOKEN (copy the
+//     Bearer token from the signed-in app's network requests).
+//   • Local `rayfin up` dev — password auth works; we sign in (creating the seed
+//     user on first run) and the client auto-attaches the session to data calls.
+const SEED_EMAIL = process.env.RAYFIN_SEED_EMAIL ?? 'seed@SENTINEL.local';
+const SEED_PASSWORD = process.env.RAYFIN_SEED_PASSWORD ?? 'SENTINEL!2026';
+
+async function ensureAuth(): Promise<void> {
+  if (accessToken) {
+    console.log('[seed] using RAYFIN_ACCESS_TOKEN');
+    return;
+  }
+  try {
+    await client.auth.signIn({ email: SEED_EMAIL, password: SEED_PASSWORD });
+  } catch {
+    await client.auth.signUp({ email: SEED_EMAIL, password: SEED_PASSWORD });
+    await client.auth.signIn({ email: SEED_EMAIL, password: SEED_PASSWORD });
+  }
+  console.log(`[seed] authenticated as ${SEED_EMAIL}`);
+}
 
 function readJsonl<T>(name: string): T[] {
   const p = resolve(DATASET_DIR, name);
@@ -55,6 +83,7 @@ interface RawDrone {
 }
 
 async function main() {
+  await ensureAuth();
   const vehicles = readJsonl<RawVehicle>('vehicle_status.jsonl');
   const soldiers = readJsonl<RawSoldier>('soldier_health.jsonl');
   const drones = readJsonl<RawDrone>('drone_observations.jsonl');
