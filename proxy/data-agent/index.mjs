@@ -45,6 +45,13 @@ const {
 // different resource for the Data Agent endpoint.
 const FABRIC_SCOPE = 'https://api.fabric.microsoft.com/.default';
 
+// The published Data Agent endpoint is OpenAI-Assistants compatible
+// (path ends with /aiassistant/openai). These match what the Fabric
+// `FabricOpenAI` SDK client sends under the hood.
+const API_VERSION = '2024-05-01-preview';
+const RUN_POLL_MS = 1500;
+const RUN_TIMEOUT_MS = 40000;
+
 /** Acquire an app-only access token for the Fabric service. */
 async function getToken() {
   const body = new URLSearchParams({
@@ -65,29 +72,68 @@ async function getToken() {
 /**
  * Send the question to the Data Agent and normalise the reply.
  *
- * Replace the body/parsing here to match your published agent. The default is a
- * simple POST { question } → { answer, sql } which works with a proxy/AI-skill
- * that already wraps the threads/runs protocol. For a raw Data Agent you would:
- *   1) POST .../threads                      → threadId
- *   2) POST .../threads/{id}/messages        (role:user, content: question)
- *   3) POST .../threads/{id}/runs            → poll until completed
- *   4) GET  .../threads/{id}/messages        → newest assistant message
+ * The published endpoint speaks the OpenAI Assistants API (its path ends with
+ * `/aiassistant/openai`). The full conversation flow is:
+ *   1) POST {base}/assistants                 → assistantId (model is a formality)
+ *   2) POST {base}/threads                     → threadId
+ *   3) POST {base}/threads/{id}/messages       (role:user, content: question)
+ *   4) POST {base}/threads/{id}/runs           → runId  (assistant_id)
+ *   5) GET  {base}/threads/{id}/runs/{runId}   → poll until terminal status
+ *   6) GET  {base}/threads/{id}/messages       → newest assistant message
+ * Every request carries `?api-version=` plus the `OpenAI-Beta: assistants=v2`
+ * header, exactly like the Fabric SDK's FabricOpenAI client.
  */
 async function callDataAgent(token, question) {
-  const res = await fetch(DATA_AGENT_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ question }),
-  });
-  if (!res.ok) throw new Error(`data agent failed: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  // Be liberal in what we accept from the agent.
+  const base = DATA_AGENT_URL.replace(/\/+$/, '');
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'OpenAI-Beta': 'assistants=v2',
+  };
+
+  const fapi = async (path, method = 'GET', body) => {
+    const url = `${base}${path}${path.includes('?') ? '&' : '?'}api-version=${API_VERSION}`;
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(`data agent ${method} ${path} failed: ${res.status} ${await res.text()}`);
+    }
+    return res.json();
+  };
+
+  const assistant = await fapi('/assistants', 'POST', { model: 'gpt-4o' });
+  const thread = await fapi('/threads', 'POST', {});
+  await fapi(`/threads/${thread.id}/messages`, 'POST', { role: 'user', content: question });
+  let run = await fapi(`/threads/${thread.id}/runs`, 'POST', { assistant_id: assistant.id });
+
+  const deadline = Date.now() + RUN_TIMEOUT_MS;
+  while (run.status === 'queued' || run.status === 'in_progress' || run.status === 'cancelling') {
+    if (Date.now() > deadline) throw new Error(`data agent run timed out (last status: ${run.status})`);
+    await new Promise((r) => setTimeout(r, RUN_POLL_MS));
+    run = await fapi(`/threads/${thread.id}/runs/${run.id}`);
+  }
+  if (run.status !== 'completed') {
+    const reason = run.last_error?.message ?? run.incomplete_details?.reason ?? run.status;
+    throw new Error(`data agent run did not complete: ${reason}`);
+  }
+
+  const messages = await fapi(`/threads/${thread.id}/messages?order=desc&limit=10`);
+  const assistantMsg = (messages.data ?? []).find((m) => m.role === 'assistant');
+  const answer = (assistantMsg?.content ?? [])
+    .filter((c) => c.type === 'text')
+    .map((c) => c.text?.value ?? '')
+    .join('\n')
+    .trim();
+
+  // Surface any fenced SQL block the agent included, as a convenience.
+  const sqlMatch = answer.match(/```sql\s*([\s\S]*?)```/i);
+
   return {
-    answer: data.answer ?? data.output ?? data.content ?? '',
-    sql: data.sql ?? data.query ?? undefined,
+    answer: sqlMatch ? answer.replace(sqlMatch[0], '').trim() : answer,
+    sql: sqlMatch ? sqlMatch[1].trim() : undefined,
   };
 }
 
