@@ -9,3 +9,7 @@ dist-rayfin
 *.log
 .vite
 .DS_Store
+
+# Rayfin deploy artifacts (per-environment, not source)
+rayfin/.temp
+rayfin/.deployments.json

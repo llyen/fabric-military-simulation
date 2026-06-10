@@ -27,12 +27,40 @@ if (!apiUrl || !key) {
   process.exit(1);
 }
 
+const accessToken =
+  process.env.RAYFIN_ACCESS_TOKEN ?? process.env.VITE_RAYFIN_ACCESS_TOKEN;
+
 const client = new RayfinClient<IronshieldSchema>({
   baseUrl: apiUrl.endsWith('/') ? apiUrl : `${apiUrl}/`,
   publishableKey: key,
+  ...(accessToken ? { accessToken } : {}),
   useProxy: false,
   authStorage: false,
 });
+
+// Entities are guarded by @role('authenticated', ...), so headless writes need a
+// Rayfin session. Two supported modes:
+//   • Fabric hosting — only Fabric brokered (SSO) auth is available, which is
+//     browser-only. Supply a Rayfin session JWT via RAYFIN_ACCESS_TOKEN (copy the
+//     Bearer token from the signed-in app's network requests).
+//   • Local `rayfin up` dev — password auth works; we sign in (creating the sim
+//     user on first run) and the client auto-attaches the session to data calls.
+const SIM_EMAIL = process.env.RAYFIN_SEED_EMAIL ?? 'seed@ironshield.local';
+const SIM_PASSWORD = process.env.RAYFIN_SEED_PASSWORD ?? 'Ironshield!2026';
+
+async function ensureAuth(): Promise<void> {
+  if (accessToken) {
+    console.log('[simulator] using RAYFIN_ACCESS_TOKEN');
+    return;
+  }
+  try {
+    await client.auth.signIn({ email: SIM_EMAIL, password: SIM_PASSWORD });
+  } catch {
+    await client.auth.signUp({ email: SIM_EMAIL, password: SIM_PASSWORD });
+    await client.auth.signIn({ email: SIM_EMAIL, password: SIM_PASSWORD });
+  }
+  console.log(`[simulator] authenticated as ${SIM_EMAIL}`);
+}
 
 const TICK_MS = 1000;
 const world = buildInitialWorld();
@@ -75,6 +103,7 @@ function withoutId<T extends { id: string }>(o: T): Omit<T, 'id'> {
 
 async function loop() {
   console.log(`[simulator] connected to ${apiUrl}`);
+  await ensureAuth();
   await pushAll();
   setInterval(async () => {
     advance(world);

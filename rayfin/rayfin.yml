@@ -10,6 +10,7 @@ services:
       enabled: true
     allowedRedirectUris:
       - http://localhost:5173
+      - https://equal-stone-42c842958a-westeurope.webapp.fabricapps.net
   data:
     enabled: true
     dialect: mssql
@@ -18,4 +19,8 @@ services:
     folder: dist
     buildCommand: npm run build:fabric
     indexDocument: index.html
+  storage:
+    enabled: false
+  functions:
+    enabled: false
 publishable_key: pk-replace-after-rayfin-up
