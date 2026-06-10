@@ -16,8 +16,8 @@ export class Soldier {
   @text({ max: 32 }) soldierId!: string;
   @text({ max: 64 }) unitName!: string;
   @text({ max: 16 }) sector!: string;
-  @decimal() latitude!: number;
-  @decimal() longitude!: number;
+  @decimal({ precision: 18, scale: 6 }) latitude!: number;
+  @decimal({ precision: 18, scale: 6 }) longitude!: number;
   @int() heartRate!: number;
   @decimal() bodyTemp!: number;
   @int() bloodOxygen!: number;

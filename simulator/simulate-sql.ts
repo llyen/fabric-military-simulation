@@ -38,8 +38,8 @@ async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInit
     await pool.request()
       .input('id', sql.UniqueIdentifier, randomUUID())
       .input('name', sql.NVarChar(32), sec.name)
-      .input('centerLat', sql.Decimal(18, 2), sec.centerLat)
-      .input('centerLon', sql.Decimal(18, 2), sec.centerLon)
+      .input('centerLat', sql.Decimal(18, 6), sec.centerLat)
+      .input('centerLon', sql.Decimal(18, 6), sec.centerLon)
       .input('radiusKm', sql.Decimal(18, 2), sec.radiusKm)
       .input('role', sql.NVarChar(32), sec.role)
       .query(`INSERT INTO dbo.Sectors (id, name, centerLat, centerLon, radiusKm, role)
@@ -53,8 +53,8 @@ async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInit
       .input('vehicleType', sql.NVarChar(32), v.vehicleType)
       .input('unitName', sql.NVarChar(64), v.unitName)
       .input('sector', sql.NVarChar(16), v.sector)
-      .input('latitude', sql.Decimal(18, 2), v.latitude)
-      .input('longitude', sql.Decimal(18, 2), v.longitude)
+      .input('latitude', sql.Decimal(18, 6), v.latitude)
+      .input('longitude', sql.Decimal(18, 6), v.longitude)
       .input('speedKmh', sql.Decimal(18, 2), v.speedKmh)
       .input('headingDeg', sql.Int, Math.round(v.headingDeg))
       .input('engineStatus', sql.NVarChar(16), v.engineStatus)
@@ -74,8 +74,8 @@ async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInit
       .input('soldierId', sql.NVarChar(32), s.soldierId)
       .input('unitName', sql.NVarChar(64), s.unitName)
       .input('sector', sql.NVarChar(16), s.sector)
-      .input('latitude', sql.Decimal(18, 2), s.latitude)
-      .input('longitude', sql.Decimal(18, 2), s.longitude)
+      .input('latitude', sql.Decimal(18, 6), s.latitude)
+      .input('longitude', sql.Decimal(18, 6), s.longitude)
       .input('heartRate', sql.Int, Math.round(s.heartRate))
       .input('bodyTemp', sql.Decimal(18, 2), s.bodyTemp)
       .input('bloodOxygen', sql.Int, Math.round(s.bloodOxygen))
@@ -93,8 +93,8 @@ async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInit
       .input('droneId', sql.NVarChar(32), d.droneId)
       .input('droneType', sql.NVarChar(32), d.droneType)
       .input('sector', sql.NVarChar(16), d.sector)
-      .input('latitude', sql.Decimal(18, 2), d.latitude)
-      .input('longitude', sql.Decimal(18, 2), d.longitude)
+      .input('latitude', sql.Decimal(18, 6), d.latitude)
+      .input('longitude', sql.Decimal(18, 6), d.longitude)
       .input('altitudeM', sql.Decimal(18, 2), d.altitudeM)
       .input('batteryPercent', sql.Int, Math.round(d.batteryPercent))
       .input('observationType', sql.NVarChar(32), d.observationType)
@@ -150,8 +150,8 @@ async function pushMovement(
       FROM dbo.Vehicles v
       JOIN OPENJSON(@data) WITH (
         vehicleId nvarchar(32) '$.vehicleId',
-        latitude decimal(18,2) '$.latitude',
-        longitude decimal(18,2) '$.longitude',
+        latitude decimal(18,6) '$.latitude',
+        longitude decimal(18,6) '$.longitude',
         speedKmh decimal(18,2) '$.speedKmh',
         headingDeg int '$.headingDeg',
         fuelPercent int '$.fuelPercent'
@@ -189,8 +189,8 @@ async function pushMovement(
       FROM dbo.Drones d
       JOIN OPENJSON(@data) WITH (
         droneId nvarchar(32) '$.droneId',
-        latitude decimal(18,2) '$.latitude',
-        longitude decimal(18,2) '$.longitude'
+        latitude decimal(18,6) '$.latitude',
+        longitude decimal(18,6) '$.longitude'
       ) j ON j.droneId = d.droneId`);
 
   const weatherJson = JSON.stringify(
@@ -225,8 +225,8 @@ async function insertNewTracks(
       .input('classification', sql.NVarChar(16), t.classification)
       .input('objectType', sql.NVarChar(32), t.objectType)
       .input('sector', sql.NVarChar(16), t.sector)
-      .input('latitude', sql.Decimal(18, 2), t.latitude)
-      .input('longitude', sql.Decimal(18, 2), t.longitude)
+      .input('latitude', sql.Decimal(18, 6), t.latitude)
+      .input('longitude', sql.Decimal(18, 6), t.longitude)
       .input('speedKmh', sql.Decimal(18, 2), t.speedKmh)
       .input('headingDeg', sql.Int, Math.round(t.headingDeg))
       .input('distanceToBlueKm', sql.Decimal(18, 2), t.distanceToBlueKm)
