@@ -33,6 +33,19 @@ import { advance, buildInitialWorld } from './world.js';
 // what users see running the app locally.
 const TICK_MS = Number(process.env.SIM_TICK_MS ?? 1000);
 const SIM_STEPS = Math.max(1, Number(process.env.SIM_STEPS ?? 4));
+// A single tick's writes must finish within this budget; otherwise we treat the
+// connection as dead, abort, and reconnect. Prevents a half-open socket (Fabric
+// SQL silently dropping idle connections) from wedging the stream forever.
+const WRITE_TIMEOUT_MS = Number(process.env.SIM_WRITE_TIMEOUT_MS ?? 8000);
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`write timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInitialWorld>) {
   await pool.request().batch(
@@ -248,8 +261,8 @@ async function insertNewTracks(
 }
 
 async function main() {
-  const pool = await connect();
   const world = buildInitialWorld();
+  let pool = await connect();
 
   console.log(
     `[simulate:sql] seeding sectors=${world.sectors.length} vehicles=${world.vehicles.length} ` +
@@ -261,20 +274,43 @@ async function main() {
   const insertedTracks = new Set<string>();
   let busy = false;
 
+  async function reconnect() {
+    try {
+      await pool.close();
+    } catch {
+      /* ignore close errors on a dead socket */
+    }
+    pool = await connect(); // fresh Entra token + fresh TCP connection
+  }
+
   setInterval(async () => {
     if (busy) return; // skip a tick if the previous write is still in flight
     busy = true;
     for (let i = 0; i < SIM_STEPS; i++) advance(world);
     try {
-      await pushMovement(pool, world);
-      await insertNewTracks(pool, world, insertedTracks);
+      // Hard timeout so a half-open socket can never wedge the loop forever.
+      const writeP = (async () => {
+        await pushMovement(pool, world);
+        await insertNewTracks(pool, world, insertedTracks);
+      })();
+      writeP.catch(() => {}); // swallow late rejection after a timeout
+      await withTimeout(writeP, WRITE_TIMEOUT_MS);
+
       const mm = String(Math.floor(world.missionClockSec / 60)).padStart(2, '0');
       const ss = String(world.missionClockSec % 60).padStart(2, '0');
       process.stdout.write(
         `\rT+${mm}:${ss}  vehicles=${world.vehicles.length} tracks=${world.radarTracks.length}   `
       );
     } catch (err) {
-      console.error('\n[simulate:sql] tick failed', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`\n[simulate:sql] tick failed (${msg}) — reconnecting`);
+      try {
+        await reconnect();
+        console.error('[simulate:sql] reconnected, resuming stream');
+      } catch (e2) {
+        const m2 = e2 instanceof Error ? e2.message : String(e2);
+        console.error(`[simulate:sql] reconnect failed (${m2}); will retry next tick`);
+      }
     } finally {
       busy = false;
     }

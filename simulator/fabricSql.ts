@@ -77,7 +77,10 @@ export async function connect(target?: SqlTarget): Promise<sql.ConnectionPool> {
     server: t.server,
     database: t.database,
     port: 1433,
-    options: { encrypt: true, trustServerCertificate: false },
+    connectionTimeout: 15000,
+    requestTimeout: 15000,
+    options: { encrypt: true, trustServerCertificate: false, enableArithAbort: true },
+    pool: { max: 4, min: 0, idleTimeoutMillis: 30000 },
     authentication: {
       type: 'azure-active-directory-access-token',
       options: { token: t.token },
