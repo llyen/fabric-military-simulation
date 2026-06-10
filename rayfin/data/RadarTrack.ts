@@ -19,8 +19,8 @@ export class RadarTrack {
   /** 'drone' | 'armored_vehicle' | 'aircraft' | 'infantry' | 'unknown' */
   @text({ max: 32 }) objectType!: string;
   @text({ max: 16 }) sector!: string;
-  @decimal() latitude!: number;
-  @decimal() longitude!: number;
+  @decimal({ precision: 18, scale: 6 }) latitude!: number;
+  @decimal({ precision: 18, scale: 6 }) longitude!: number;
   @decimal() speedKmh!: number;
   @int() headingDeg!: number;
   @decimal() distanceToBlueKm!: number;

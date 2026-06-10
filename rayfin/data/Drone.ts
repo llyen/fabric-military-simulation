@@ -17,8 +17,8 @@ export class Drone {
   /** 'FlyEye' | 'Warmate' */
   @text({ max: 32 }) droneType!: string;
   @text({ max: 16 }) sector!: string;
-  @decimal() latitude!: number;
-  @decimal() longitude!: number;
+  @decimal({ precision: 18, scale: 6 }) latitude!: number;
+  @decimal({ precision: 18, scale: 6 }) longitude!: number;
   @decimal() altitudeM!: number;
   @int() batteryPercent!: number;
   /** 'patrol_scan' | 'target_lock' | 'rtb' | 'down' */
