@@ -32,7 +32,10 @@ import { advance, buildInitialWorld } from './world.js';
 // 4 sim-seconds per real second). Default 4 keeps SQL movement in step with
 // what users see running the app locally.
 const TICK_MS = Number(process.env.SIM_TICK_MS ?? 1000);
-const SIM_STEPS = Math.max(1, Number(process.env.SIM_STEPS ?? 4));
+// Steps advanced per tick at 1x speed. The app's speed control multiplies this
+// (0 = pause, 0.5/1/2/4/8) via the SimControls table, so 2x runs twice as many
+// sim-seconds per tick, etc.
+const BASE_STEPS = Math.max(1, Number(process.env.SIM_STEPS ?? 4));
 // A single tick's writes must finish within this budget; otherwise we treat the
 // connection as dead, abort, and reconnect. Prevents a half-open socket (Fabric
 // SQL silently dropping idle connections) from wedging the stream forever.
@@ -372,6 +375,14 @@ async function insertEvents(pool: sql.ConnectionPool, events: SimEventRow[]) {
       )`);
 }
 
+/** Latest operator-selected tempo multiplier (0 = paused); fallback if unset. */
+async function readDesiredSpeed(pool: sql.ConnectionPool, fallback: number): Promise<number> {
+  const r = await pool.request().query(
+    'SELECT TOP 1 speed FROM dbo.SimControls ORDER BY createdAt DESC'
+  );
+  return r.recordset.length ? Number(r.recordset[0].speed) : fallback;
+}
+
 async function main() {
   const world = buildInitialWorld();
   let pool = await connect();
@@ -391,6 +402,7 @@ async function main() {
     lastLogiT: -999,
   };
   let busy = false;
+  let speed = 1; // current tempo multiplier from the app (0 = paused)
 
   async function reconnect() {
     try {
@@ -404,10 +416,13 @@ async function main() {
   setInterval(async () => {
     if (busy) return; // skip a tick if the previous write is still in flight
     busy = true;
-    for (let i = 0; i < SIM_STEPS; i++) advance(world);
     try {
       // Hard timeout so a half-open socket can never wedge the loop forever.
       const writeP = (async () => {
+        speed = await readDesiredSpeed(pool, speed);
+        if (speed <= 0) return; // paused — hold the world in place
+        const steps = Math.max(1, Math.round(BASE_STEPS * speed));
+        for (let i = 0; i < steps; i++) advance(world);
         await pushMovement(pool, world);
         const fresh = await insertNewTracks(pool, world, insertedTracks);
         await insertEvents(pool, buildEvents(world, fresh, evState));
@@ -417,8 +432,9 @@ async function main() {
 
       const mm = String(Math.floor(world.missionClockSec / 60)).padStart(2, '0');
       const ss = String(world.missionClockSec % 60).padStart(2, '0');
+      const rate = speed <= 0 ? 'PAUSED' : `${speed}x`;
       process.stdout.write(
-        `\rT+${mm}:${ss}  vehicles=${world.vehicles.length} tracks=${world.radarTracks.length}   `
+        `\rT+${mm}:${ss}  ${rate}  vehicles=${world.vehicles.length} tracks=${world.radarTracks.length}   `
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
