@@ -26,7 +26,13 @@ import sql from 'mssql';
 import { connect } from './fabricSql.js';
 import { advance, buildInitialWorld } from './world.js';
 
-const TICK_MS = Number(process.env.SIM_TICK_MS ?? 1500);
+// One real tick advances SIM_STEPS simulated seconds. The deployed app polls
+// every 1000 ms, so we write once per second but fast-forward the world several
+// sim-seconds per write — matching the local mock (TICK 250 ms × 1 s/step ≈
+// 4 sim-seconds per real second). Default 4 keeps SQL movement in step with
+// what users see running the app locally.
+const TICK_MS = Number(process.env.SIM_TICK_MS ?? 1000);
+const SIM_STEPS = Math.max(1, Number(process.env.SIM_STEPS ?? 4));
 
 async function seed(pool: sql.ConnectionPool, world: ReturnType<typeof buildInitialWorld>) {
   await pool.request().batch(
@@ -258,7 +264,7 @@ async function main() {
   setInterval(async () => {
     if (busy) return; // skip a tick if the previous write is still in flight
     busy = true;
-    advance(world);
+    for (let i = 0; i < SIM_STEPS; i++) advance(world);
     try {
       await pushMovement(pool, world);
       await insertNewTracks(pool, world, insertedTracks);
