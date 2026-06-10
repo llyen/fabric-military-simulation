@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { Selection, Vehicle } from '@/types';
 import { geoToWorld, headingToYaw } from '@/utils/geo';
 import { terrainHeight } from '@/utils/terrain';
+import { useTrackInterpolation } from '@/utils/useTrackInterpolation';
 import { HighlightRing } from './HighlightRing';
 
 const VEHICLE_SCALE = 50;
@@ -317,31 +318,18 @@ function VehicleModel({
   onSelect: (sel: Selection) => void;
 }) {
   const ref = useRef<THREE.Group>(null!);
-  const target = useRef(new THREE.Vector3());
-  const lastPos = useRef(new THREE.Vector3());
+  const interp = useTrackInterpolation();
   const trackTex = useMemo(() => getTrackTex(), []);
 
   useFrame((_state, delta) => {
     if (!ref.current) return;
-    const [x, , z] = geoToWorld(v.latitude, v.longitude);
-    const y = terrainHeight(x, z);
-    target.current.set(x, y, z);
-    // dt-aware critically damped smoothing → consistent at any FPS / sim speed
-    const k = 1 - Math.exp(-delta * 6);
-    ref.current.position.lerp(target.current, k);
+    const [gx, , gz] = geoToWorld(v.latitude, v.longitude);
+    const s = interp(gx, gz, performance.now());
+    const y = terrainHeight(s.x, s.z);
+    ref.current.position.set(s.x, y, s.z);
 
-    // Derive heading from motion when moving fast enough; fall back to v.headingDeg.
-    let yaw: number;
-    const dx = target.current.x - lastPos.current.x;
-    const dz = target.current.z - lastPos.current.z;
-    const motion = Math.hypot(dx, dz);
-    if (motion > 0.5 && v.speedKmh > 1) {
-      yaw = Math.atan2(dx, dz);
-    } else {
-      yaw = headingToYaw(v.headingDeg);
-    }
-    lastPos.current.copy(target.current);
-
+    // Derive heading from motion when moving; fall back to v.headingDeg.
+    const yaw = s.moving && v.speedKmh > 1 ? s.yaw : headingToYaw(v.headingDeg);
     let dy = yaw - ref.current.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
