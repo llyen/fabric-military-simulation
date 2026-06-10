@@ -1,11 +1,32 @@
+import { useEffect } from 'react';
 import { useSimControl } from '@/hooks/useSimControl';
+import { isMockMode } from '@/services/rayfinClient';
+import { pushSimSpeed, fetchSimSpeed } from '@/services/simControl';
 
 const PRESETS = [0, 0.5, 1, 2, 4, 8];
 
 export function SpeedControl() {
   const speed = useSimControl((s) => s.speed);
   const setSpeed = useSimControl((s) => s.setSpeed);
-  const togglePause = useSimControl((s) => s.togglePause);
+
+  // In live mode, reflect the tempo currently applied by the simulator.
+  useEffect(() => {
+    if (isMockMode()) return;
+    let cancelled = false;
+    fetchSimSpeed().then((s) => {
+      if (!cancelled && s !== null) setSpeed(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [setSpeed]);
+
+  // Apply locally (drives the mock sim + slider) and push to the live simulator.
+  const applySpeed = (s: number) => {
+    setSpeed(s);
+    void pushSimSpeed(s);
+  };
+  const togglePause = () => applySpeed(speed === 0 ? 1 : 0);
 
   // Map speed → slider index for snapping
   const idx = PRESETS.indexOf(speed);
@@ -29,7 +50,7 @@ export function SpeedControl() {
           max={PRESETS.length - 1}
           step={1}
           value={sliderValue}
-          onChange={(e) => setSpeed(PRESETS[Number(e.target.value)])}
+          onChange={(e) => applySpeed(PRESETS[Number(e.target.value)])}
         />
         <div className="speed-value">
           {speed === 0 ? 'PAUSE' : `${speed}×`}
@@ -40,7 +61,7 @@ export function SpeedControl() {
           <button
             key={p}
             className={`speed-tick ${p === speed ? 'active' : ''}`}
-            onClick={() => setSpeed(p)}
+            onClick={() => applySpeed(p)}
           >
             {p === 0 ? '⏸' : `${p}×`}
           </button>
